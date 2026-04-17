@@ -6,7 +6,7 @@ import { DefaultChatTransport } from "ai"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Send, Sparkles, Bot, Zap, AlertCircle, Lock } from "lucide-react"
+import { Send, Sparkles, Bot, Zap, AlertCircle, Lock, Mic, MicOff } from "lucide-react"
 import { ComparisonChart } from "./comparison-chart"
 import { useChatbot } from "./chatbot-provider"
 import { anomalyStateService } from "@/components/anomaly-state.service"
@@ -35,6 +35,8 @@ export function ChatbotWidget() {
   const [isAnomalyMode, setIsAnomalyMode] = useState(false)
   const [error, setError] = useState<ErrorResponse | null>(null)
   const [userRole, setUserRole] = useState<string | null>(null)
+  const [isListening, setIsListening] = useState(false)
+  const recognitionRef = useRef<any>(null)
   const { pendingAnomaly, setPendingAnomaly, onAnomalyResolved } = useChatbot()
 
   // Get user role from session API on mount
@@ -61,6 +63,112 @@ export function ChatbotWidget() {
 
     fetchUserSession()
   }, [])
+
+  // Initialize Web Speech API for voice dictation
+  useEffect(() => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    if (!SpeechRecognition) {
+      console.warn("[CHATBOT] Speech Recognition API not supported")
+      return
+    }
+
+    const recognition = new SpeechRecognition()
+    recognition.continuous = false
+    recognition.interimResults = true
+    recognition.lang = "en-US"
+
+    recognition.onstart = () => {
+      console.log("[CHATBOT] Voice dictation started")
+      setIsListening(true)
+    }
+
+    recognition.onend = () => {
+      console.log("[CHATBOT] Voice dictation ended")
+      setIsListening(false)
+    }
+
+    recognition.onresult = (event: any) => {
+      let interimTranscript = ""
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript
+        if (event.results[i].isFinal) {
+          // Final result - add to input
+          setInput((prev) => prev + transcript + " ")
+        } else {
+          // Interim result for preview
+          interimTranscript += transcript
+        }
+      }
+    }
+
+    recognition.onerror = (event: any) => {
+      // Silently handle error - don't log to console
+      if (event.error !== "aborted") {
+        console.error("[CHATBOT] Speech recognition error:", event.error)
+      }
+    }
+
+    recognitionRef.current = recognition
+
+    // Cleanup function to abort recognition on unmount
+    return () => {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.abort()
+        } catch (e) {
+          // Ignore cleanup errors
+        }
+      }
+    }
+  }, [])
+
+  // Handle auto-send when listening ends
+  useEffect(() => {
+    if (!isListening && input.trim()) {
+      const timer = setTimeout(() => {
+        handleVoiceSubmit()
+      }, 150)
+      return () => clearTimeout(timer)
+    }
+  }, [isListening])
+
+  const toggleVoiceDictation = () => {
+    if (!recognitionRef.current) {
+      console.error("[CHATBOT] Speech Recognition not available")
+      return
+    }
+
+    if (isListening) {
+      recognitionRef.current.stop()
+      setIsListening(false)
+    } else {
+      recognitionRef.current.start()
+      setIsListening(true)
+    }
+  }
+
+  const handleVoiceSubmit = () => {
+    if (!input.trim() || isLoading) return
+
+    const normalizedRole = userRole?.toLowerCase()
+
+    // 🔒 FRONTEND RBAC: Block financial queries for sales users BEFORE sending to backend
+    if (normalizedRole === "sales" && isFinancialQuery(input)) {
+      console.warn(`[CHATBOT] Frontend RBAC: Sales user blocked from financial query: "${input}"`)
+      setError({
+        error: "Access Restricted",
+        message: "🔒 You do not have permission to view financial data."
+      })
+      setInput("") // Clear input
+      return
+    }
+
+    // ✅ Safe to send - not a financial query or user has permission
+    setComparisonData(null)
+    setError(null)
+    sendMessage({ text: input })
+    setInput("")
+  }
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -310,7 +418,224 @@ Please provide a detailed analysis and solution recommendations. After analysis,
           -ms-overflow-style: none;
           scrollbar-width: none;
         }
+
+        /* Cartoon Pop-In Animation */
+        @keyframes cartoonPopIn {
+          0% {
+            transform: scale(0) rotate(-10deg);
+            opacity: 0;
+          }
+          50% {
+            transform: scale(1.15) rotate(3deg);
+          }
+          100% {
+            transform: scale(1) rotate(0deg);
+            opacity: 1;
+          }
+        }
+
+        /* Pop Out Animation */
+        @keyframes cartoonPopOut {
+          0% {
+            transform: scale(1) rotate(0deg);
+            opacity: 1;
+          }
+          100% {
+            transform: scale(0) rotate(-10deg);
+            opacity: 0;
+          }
+        }
+
+        /* Bounce Effect */
+        @keyframes bounce {
+          0%, 100% {
+            transform: translateY(0);
+          }
+          50% {
+            transform: translateY(-20px);
+          }
+        }
+
+        /* Pulse Glow for Mic */
+        @keyframes micPulse {
+          0%, 100% {
+            box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7), inset 0 0 0 0 rgba(239, 68, 68, 0.3);
+          }
+          50% {
+            box-shadow: 0 0 0 25px rgba(239, 68, 68, 0), inset 0 0 30px 0 rgba(239, 68, 68, 0.5);
+          }
+        }
+
+        /* Wave Animation for listening text */
+        @keyframes wave {
+          0%, 100% {
+            opacity: 0.6;
+            transform: scale(1);
+          }
+          50% {
+            opacity: 1;
+            transform: scale(1.08);
+          }
+        }
+
+        /* Soundwave Animation */
+        @keyframes soundwave {
+          0%, 100% {
+            transform: scaleY(0.4);
+            opacity: 0.4;
+          }
+          50% {
+            transform: scaleY(1);
+            opacity: 1;
+          }
+        }
+
+        /* Fade Background */
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+          }
+          to {
+            opacity: 1;
+          }
+        }
+
+        .modal-enter {
+          animation: cartoonPopIn 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+
+        .modal-exit {
+          animation: cartoonPopOut 0.5s cubic-bezier(0.64, 0, 0.78, 0.34) forwards;
+        }
+
+        .mic-glow {
+          animation: micPulse 2.5s ease-in-out infinite;
+        }
+
+        .listening-text {
+          animation: wave 1.5s ease-in-out infinite;
+        }
+
+        .soundwave-bar {
+          animation: soundwave 0.8s ease-in-out infinite;
+        }
+
+        .soundwave-bar:nth-child(1) {
+          animation-delay: 0s;
+        }
+        .soundwave-bar:nth-child(2) {
+          animation-delay: 0.1s;
+        }
+        .soundwave-bar:nth-child(3) {
+          animation-delay: 0.2s;
+        }
+        .soundwave-bar:nth-child(4) {
+          animation-delay: 0.3s;
+        }
+        .soundwave-bar:nth-child(5) {
+          animation-delay: 0.2s;
+        }
+        .soundwave-bar:nth-child(6) {
+          animation-delay: 0.1s;
+        }
+
+        .fade-in {
+          animation: fadeIn 0.4s ease-out;
+        }
+
+        /* Close Button Animation */
+        @keyframes rotateClose {
+          0% {
+            transform: rotate(0deg) scale(1);
+          }
+          50% {
+            transform: rotate(180deg) scale(1.1);
+          }
+          100% {
+            transform: rotate(360deg) scale(1);
+          }
+        }
+
+        .close-btn:hover {
+          animation: rotateClose 0.6s ease-in-out;
+        }
       `}</style>
+
+      {/* Listening Modal Popup with Cartoon Animation */}
+      {isListening && (
+        <div 
+          className="fixed inset-0 z-[60] flex items-center justify-center fade-in"
+          style={{ backgroundColor: 'rgba(0, 0, 0, 0.55)' }}
+        >
+          <div 
+            className="modal-enter relative bg-gradient-to-br from-red-950 via-slate-900 to-red-950 border-4 border-red-500 rounded-[40px] shadow-2xl shadow-red-500/70 p-12 flex flex-col items-center justify-center w-96 h-[430px]"
+          >
+            
+            {/* Animated Background Glow */}
+            <div className="absolute inset-0 rounded-[40px] bg-gradient-to-br from-red-600/25 to-transparent opacity-50"></div>
+
+            {/* Close Button - Top Right */}
+            <button
+              onClick={() => {
+                if (recognitionRef.current) {
+                  recognitionRef.current.abort()
+                  setIsListening(false)
+                }
+              }}
+              className="close-btn absolute top-5 right-5 z-20 w-12 h-12 bg-red-600 hover:bg-red-500 rounded-full flex items-center justify-center transition-all duration-200 hover:shadow-lg hover:shadow-red-500/60 cursor-pointer border-2 border-red-400 active:scale-95"
+              title="Stop listening"
+            >
+              <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            {/* Content Container */}
+            <div className="relative z-10 flex flex-col items-center justify-center w-full h-full gap-6">
+              
+              {/* Red Mic Icon with Pulse Glow */}
+              <div className="relative flex items-center justify-center mt-2">
+                <div className="mic-glow absolute w-40 h-40 bg-gradient-to-br from-red-600 to-red-700 rounded-full"></div>
+                <button
+                  onClick={() => {
+                    if (recognitionRef.current) {
+                      recognitionRef.current.abort()
+                      setIsListening(false)
+                    }
+                  }}
+                  className="relative w-32 h-32 bg-gradient-to-br from-red-600 to-red-800 rounded-full flex items-center justify-center shadow-2xl shadow-red-500/80 border-4 border-red-400 hover:from-red-500 hover:to-red-700 transition-all duration-200 cursor-pointer hover:scale-110 active:scale-95"
+                >
+                  <Mic className="w-16 h-16 text-white animate-bounce" style={{ animationDuration: '1.5s' }} />
+                </button>
+              </div>
+
+              {/* Listening Text */}
+              <div className="text-center space-y-2">
+                <p className="listening-text text-white font-black text-5xl tracking-wider">
+                  Listening
+                </p>
+                <p className="text-red-300 font-semibold text-lg">Speak Now</p>
+              </div>
+
+              {/* Soundwave Visualization */}
+              <div className="flex items-center justify-center gap-2.5 h-16">
+                {[1, 2, 3, 4, 5, 6].map((i) => (
+                  <div
+                    key={i}
+                    className="soundwave-bar bg-gradient-to-t from-red-500 to-red-300 rounded-full shadow-lg"
+                    style={{ width: '3px', height: `${25 + i * 12}px` }}
+                  ></div>
+                ))}
+              </div>
+
+              {/* Hint Text */}
+              <p className="text-red-200/70 text-sm font-medium leading-tight">
+                Click mic or X to stop
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <Card className="fixed top-20 right-0 bottom-0 w-[360px] flex flex-col shadow-2xl z-50 overflow-hidden border-l border-violet-900/30 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 backdrop-blur-xl">
         <CardHeader className="pb-3 border-b border-violet-900/20 shrink-0 px-4 bg-gradient-to-r from-violet-900/10 to-transparent">
@@ -472,6 +797,23 @@ Please provide a detailed analysis and solution recommendations. After analysis,
                 disabled={isLoading}
                 className="flex-1 bg-slate-800/60 border-slate-700/50 text-white placeholder-slate-500 focus-visible:ring-violet-500 focus-visible:border-violet-500"
               />
+              <Button
+                type="button"
+                size="icon"
+                onClick={toggleVoiceDictation}
+                className={`transition-all ${
+                  isListening 
+                    ? "bg-gradient-to-br from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white shadow-lg shadow-red-500/30" 
+                    : "bg-gradient-to-br from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white shadow-lg shadow-violet-500/30"
+                }`}
+                title={isListening ? "Stop listening" : "Start voice dictation"}
+              >
+                {isListening ? (
+                  <MicOff className="w-4 h-4" />
+                ) : (
+                  <Mic className="w-4 h-4" />
+                )}
+              </Button>
               <Button
                 type="submit"
                 disabled={isLoading || !input.trim()}
