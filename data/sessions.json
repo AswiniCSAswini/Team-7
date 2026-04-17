@@ -1,12 +1,12 @@
 {
   "sessions": [
     {
-      "sessionId": "session_1776429490142",
-      "email": "pranav@goldmansachs.com",
-      "role": "Sales",
-      "name": "Pranav",
-      "loginTime": "2026-04-17T12:38:10.142Z",
-      "lastActivityTime": "2026-04-17T12:38:10.397Z",
+      "sessionId": "session_1776443887950",
+      "email": "abhinav@goldmansachs.com",
+      "role": "Financial",
+      "name": "Abhinav",
+      "loginTime": "2026-04-17T16:38:07.950Z",
+      "lastActivityTime": "2026-04-17T16:38:10.769Z",
       "isActive": true
     }
   ]
