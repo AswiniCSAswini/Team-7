@@ -10,7 +10,6 @@ import { Send, Sparkles, Bot, Zap, AlertCircle, Lock, Mic, MicOff } from "lucide
 import { ComparisonChart } from "./comparison-chart"
 import { useChatbot } from "./chatbot-provider"
 import { anomalyStateService } from "@/components/anomaly-state.service"
-import { isFinancialQuery } from "@/app/api/utils/simple-rbac"
 
 interface ComparisonData {
   companies: string[]
@@ -150,20 +149,7 @@ export function ChatbotWidget() {
   const handleVoiceSubmit = () => {
     if (!input.trim() || isLoading) return
 
-    const normalizedRole = userRole?.toLowerCase()
-
-    // 🔒 FRONTEND RBAC: Block financial queries for sales users BEFORE sending to backend
-    if (normalizedRole === "sales" && isFinancialQuery(input)) {
-      console.warn(`[CHATBOT] Frontend RBAC: Sales user blocked from financial query: "${input}"`)
-      setError({
-        error: "Access Restricted",
-        message: "🔒 You do not have permission to view financial data."
-      })
-      setInput("") // Clear input
-      return
-    }
-
-    // ✅ Safe to send - not a financial query or user has permission
+    // ✅ All users can query all data - no restrictions
     setComparisonData(null)
     setError(null)
     sendMessage({ text: input })
@@ -252,25 +238,12 @@ export function ChatbotWidget() {
     },
   })
 
-  // Custom submit handler with frontend RBAC check
+  // Custom submit handler
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!input.trim() || isLoading) return
 
-    const normalizedRole = userRole?.toLowerCase()
-
-    // 🔒 FRONTEND RBAC: Block financial queries for sales users BEFORE sending to backend
-    if (normalizedRole === "sales" && isFinancialQuery(input)) {
-      console.warn(`[CHATBOT] Frontend RBAC: Sales user blocked from financial query: "${input}"`)
-      setError({
-        error: "Access Restricted",
-        message: "🔒 You do not have permission to view financial data."
-      })
-      setInput("") // Clear input
-      return
-    }
-
-    // ✅ Safe to send - not a financial query or user has permission
+    // ✅ All users can query all data - no restrictions
     setComparisonData(null)
     setError(null)
     sendMessage({ text: input })
